@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
+import { interviewer } from '@/constants';
 import { cn } from '@/lib/utils';
 import { vapi } from '@/lib/vapi.sdk';
 import Image from 'next/image'
@@ -19,7 +21,7 @@ interface SavedMessage {
     content: string;
 }
 
-const Agent = ({ userName, userId, type }: AgentProps) => {
+const Agent = ({ userName, userId, type, interviewId, questions }: AgentProps) => {
     const router = useRouter(); 
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [callStatus, setCallStatus] = useState<CallStatus>(CallStatus.INACTIVE);
@@ -59,23 +61,59 @@ const Agent = ({ userName, userId, type }: AgentProps) => {
         }
     },[]);
 
+    const handleGenerateFeedback = async (messages: SavedMessage[]) => {
+        console.log('Generate Feedback here.')
+    
+        //Todo: create a server action that generates feedback
+        const { success, id } = {
+            success: true,
+            id: 'feedback-id'
+        }
+        if(success && id) {
+            router.push(`/interview/${interviewId}/feedback`)
+        }else {
+            console.log('Error saving feedback.')
+            router.push('/')
+        }
+    }
+
     useEffect(() => {
-        if(callStatus === CallStatus.FINISHED) router.push('/'); 
+        if(callStatus === CallStatus.FINISHED) {
+            if(type === 'generate') {
+                router.push('/');
+            } else {
+                handleGenerateFeedback(messages);
+            }
+        }
     }, [ messages, callStatus, type, userId ]); 
 
     const handleCall = async () => {
         setCallStatus(CallStatus.CONNECTING);
 
-        await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
+        if(type === 'generate') {
+            //@ts-ignore
+            await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
             variableValues: {
                 username: userName,
                 userid: userId,
-            },
-
-            //added by Me
-            clientMessages: [],
-            serverMessages: []
+            },  
         })
+        } else {
+            let formattedQuestions = '';
+
+            if(questions) {
+                formattedQuestions = questions
+                .map((question) => `-${question}`)
+                .join('\n');
+            }
+
+            //@ts-ignore
+            await vapi.start(interviewer, {
+                variableValues: {
+                    questions: formattedQuestions,
+                },
+            })
+        }
     }
 
     const handleDisconnect = async () => {
